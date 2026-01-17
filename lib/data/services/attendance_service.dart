@@ -8,10 +8,35 @@ class AttendanceService {
 
   Future<Map<String, dynamic>> submit(List<AttendanceRecord> records) async {
     try {
-      final response = await _apiClient.post('/attendance/submit', data: {
+      // Backend uses POST /attendance for submitting attendance
+      final response = await _apiClient.post('/attendance', data: {
         'records': records.map((e) => e.toJson()).toList(),
       });
-      return response.data; // { success: number, failed: number }
+      return response.data;
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<List<dynamic>> getMyAttendance() async {
+    try {
+      final response = await _apiClient.get('/attendance');
+      if (response.data['success'] == true) {
+        return response.data['data'] ?? [];
+      }
+      return [];
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<List<dynamic>> getAttendanceByDate(String date) async {
+    try {
+      final response = await _apiClient.get('/attendance/date/$date');
+      if (response.data['success'] == true) {
+        return response.data['data'] ?? [];
+      }
+      return [];
     } catch (e) {
       rethrow;
     }

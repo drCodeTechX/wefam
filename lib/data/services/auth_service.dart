@@ -15,13 +15,16 @@ class AuthService {
 
   Future<Map<String, dynamic>> login(String username, String password) async {
     try {
-      final response = await _apiClient.post('/auth/login', data: {
+      // Backend uses /auth/family/login endpoint
+      final response = await _apiClient.post('/auth/family/login', data: {
         'username': username,
         'password': password,
       });
 
-      final data = response.data;
-      if (data['success'] == true) {
+      final responseData = response.data;
+      if (responseData['success'] == true) {
+        // Backend returns { success: true, data: { token, family } }
+        final data = responseData['data'];
         final token = data['token'];
         final familyData = Family.fromJson(data['family']);
 
@@ -30,7 +33,7 @@ class AuthService {
 
         return {'success': true, 'family': familyData};
       } else {
-        return {'success': false, 'error': data['error'] ?? 'Login failed'};
+        return {'success': false, 'error': responseData['error'] ?? 'Login failed'};
       }
     } on DioException catch (e) {
       // Check for network/connectivity issues
@@ -43,7 +46,12 @@ class AuthService {
         return {'success': false, 'error': 'Cannot connect to server. Please check your internet connection.'};
       }
       if (e.response?.statusCode == 401) {
-        return {'success': false, 'error': 'Invalid username or password.'};
+        final message = e.response?.data?['error'] ?? 'Invalid username or password.';
+        return {'success': false, 'error': message};
+      }
+      if (e.response?.statusCode == 403) {
+        final message = e.response?.data?['error'] ?? 'Account is deactivated.';
+        return {'success': false, 'error': message};
       }
       if (e.response?.statusCode == 500) {
         return {'success': false, 'error': 'Server error. Please try again later.'};
@@ -64,15 +72,16 @@ class AuthService {
 
   Future<Map<String, dynamic>> changePassword(String currentPassword, String newPassword) async {
     try {
-      final response = await _apiClient.post('/auth/change-password', data: {
+      final response = await _apiClient.post('/auth/family/change-password', data: {
         'currentPassword': currentPassword,
         'newPassword': newPassword,
       });
 
-      if (response.data['success'] == true) {
+      final responseData = response.data;
+      if (responseData['success'] == true) {
         return {'success': true};
       } else {
-        return {'success': false, 'error': response.data['error'] ?? 'Failed to change password'};
+        return {'success': false, 'error': responseData['error'] ?? 'Failed to change password'};
       }
     } on DioException catch (e) {
       if (e.type == DioExceptionType.connectionError) {
