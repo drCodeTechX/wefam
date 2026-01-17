@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:dio/dio.dart';
 import 'package:wefam/core/api/api_client.dart';
@@ -25,19 +27,33 @@ class AuthService {
 
         await _storage.write(key: 'auth_token', value: token);
         await _databaseHelper.saveFamily(familyData);
-        
-        // Also save children if provided in response, though typically loaded separately
-        // For now just family.
 
         return {'success': true, 'family': familyData};
       } else {
         return {'success': false, 'error': data['error'] ?? 'Login failed'};
       }
     } on DioException catch (e) {
-        final message = e.response?.data?['error'] ?? 'Login failed';
-        return {'success': false, 'error': message};
+      // Check for network/connectivity issues
+      if (e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.sendTimeout ||
+          e.type == DioExceptionType.receiveTimeout) {
+        return {'success': false, 'error': 'Connection timed out. Please check your internet connection.'};
+      }
+      if (e.type == DioExceptionType.connectionError) {
+        return {'success': false, 'error': 'Cannot connect to server. Please check your internet connection.'};
+      }
+      if (e.response?.statusCode == 401) {
+        return {'success': false, 'error': 'Invalid username or password.'};
+      }
+      if (e.response?.statusCode == 500) {
+        return {'success': false, 'error': 'Server error. Please try again later.'};
+      }
+      final message = e.response?.data?['error'] ?? 'Login failed. Please try again.';
+      return {'success': false, 'error': message};
+    } on SocketException {
+      return {'success': false, 'error': 'No internet connection. Please check your network.'};
     } catch (e) {
-      return {'success': false, 'error': e.toString()};
+      return {'success': false, 'error': 'An unexpected error occurred: ${e.toString()}'};
     }
   }
 
@@ -54,21 +70,24 @@ class AuthService {
       });
 
       if (response.data['success'] == true) {
-         return {'success': true};
+        return {'success': true};
       } else {
         return {'success': false, 'error': response.data['error'] ?? 'Failed to change password'};
       }
     } on DioException catch (e) {
-       final message = e.response?.data?['error'] ?? 'Failed to change password';
-       return {'success': false, 'error': message};
+      if (e.type == DioExceptionType.connectionError) {
+        return {'success': false, 'error': 'Cannot connect to server. Please check your internet connection.'};
+      }
+      final message = e.response?.data?['error'] ?? 'Failed to change password';
+      return {'success': false, 'error': message};
     }
   }
 
   Future<Family?> checkAuthStatus() async {
     final token = await _storage.read(key: 'auth_token');
     if (token != null) {
+      // Token exists - user is authenticated, load from local DB
       final family = await _databaseHelper.getFamily();
-      // Optionally verify token validity with API
       return family;
     }
     return null;
